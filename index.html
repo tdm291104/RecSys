@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gợi ý món ăn</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    body {
+      background-color: #f7f7f7;
+    }
+
+    .card {
+      transition: 0.3s;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .card:hover {
+      transform: scale(1.03);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .card img {
+      height: 160px;
+      object-fit: cover;
+    }
+
+    .form-section {
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    #loadingSpinner {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <h1 class="text-center text-primary mb-4">🍜 Gợi ý món ăn</h1>
+
+    <!-- Form lọc -->
+    <form id="recommend-form" class="form-section">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="basis" class="form-label">Cơ sở gợi ý</label>
+          <select id="basis" class="form-control" required>
+            <option value="hybrid">Hybrid</option>
+            <option value="content">Content-based</option>
+            <option value="collab">Collaborative</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label for="user_id" class="form-label">User ID</label>
+          <input type="number" id="user_id" class="form-control" placeholder="Nhập User ID" required>
+        </div>
+
+        <div class="col-md-6">
+          <label for="k" class="form-label">Số món ăn gợi ý</label>
+          <input type="number" id="k" class="form-control" value="5" required>
+        </div>
+
+        <div class="col-md-6">
+          <label for="alpha" class="form-label">Alpha (độ ưu tiên content)</label>
+          <input type="number" step="0.1" id="alpha" class="form-control" value="0.6" required>
+        </div>
+
+        <div class="col-md-6">
+          <label for="ingredients" class="form-label">Nguyên liệu phát hiện</label>
+          <input type="text" id="ingredients" class="form-control" placeholder="VD: thịt bò, hành lá">
+        </div>
+
+        <div class="col-md-6">
+          <label for="food_type" class="form-label">Loại món ăn</label>
+          <input type="text" id="food_type" class="form-control" placeholder="VD: món nước">
+        </div>
+
+        <div class="col-md-6">
+          <label for="max_time" class="form-label">Thời gian nấu tối đa (phút)</label>
+          <input type="number" id="max_time" class="form-control" placeholder="VD: 45">
+        </div>
+
+        <div class="col-md-6">
+          <label for="max_calories" class="form-label">Lượng calo tối đa</label>
+          <input type="number" id="max_calories" class="form-control" placeholder="VD: 700">
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-primary w-100">
+            🔍 Gợi ý món ăn
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <!-- Loading -->
+    <div id="loadingSpinner" class="text-center mt-4">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-2">Đang tìm món ăn phù hợp...</p>
+    </div>
+
+    <!-- Kết quả -->
+    <div id="results" class="row mt-4"></div>
+  </div>
+
+  <script>
+    document.getElementById("recommend-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const basis = document.getElementById("basis").value;
+      const user_id = parseInt(document.getElementById("user_id").value);
+      const k = parseInt(document.getElementById("k").value);
+      const detected_ingredients = document.getElementById("ingredients").value.split(",").map(i => i.trim()).filter(Boolean);
+      const filters = {
+        food_type: document.getElementById("food_type").value,
+        max_cooking_time: document.getElementById("max_time").value ? parseInt(document.getElementById("max_time").value) : null,
+        max_calories: document.getElementById("max_calories").value ? parseInt(document.getElementById("max_calories").value) : null,
+      };
+      const alpha = parseFloat(document.getElementById("alpha").value);
+
+      const payload = {
+        basis,
+        user_id,
+        k,
+        detected_ingredients,
+        filters,
+        alpha
+      };
+
+      const loadingSpinner = document.getElementById("loadingSpinner");
+      const resultsContainer = document.getElementById("results");
+      resultsContainer.innerHTML = "";
+      loadingSpinner.style.display = "block";
+
+      try {
+        const response = await fetch("http://127.0.0.1:8000/recommend", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+        loadingSpinner.style.display = "none";
+
+        if (data.results && data.results.length > 0) {
+          data.results.forEach((dish) => {
+            const card = `
+              <div class="col-md-4 mb-4">
+                <div class="card shadow-sm">
+                  <img src="${dish.image_link || 'https://via.placeholder.com/300'}" class="card-img-top" alt="${dish.dish_name || 'Món ăn'}">
+                  <div class="card-body">
+                    <h5 class="card-title text-primary">${dish.dish_name || "Tên món ăn"}</h5>
+                    <p class="card-text"><strong>Mô tả:</strong> ${dish.description || "Không có mô tả"}</p>
+                    <p><strong>Điểm:</strong> ⭐ ${dish.score || "Chưa có"}</p>
+                  </div>
+                </div>
+              </div>`;
+            resultsContainer.innerHTML += card;
+          });
+        } else {
+          resultsContainer.innerHTML = `
+            <p class='text-center text-danger'>
+              Không tìm thấy món ăn phù hợp 😢
+            </p>`;
+        }
+      } catch (err) {
+        loadingSpinner.style.display = "none";
+        console.error("Lỗi khi gọi API:", err);
+        alert("Không thể kết nối API. Vui lòng thử lại!");
+      }
+    });
+  </script>
+</body>
+</html>
